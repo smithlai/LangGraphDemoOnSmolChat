@@ -26,6 +26,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SmolChat Android"
+rootProject.name = "Langgraph on SmolChat Android"
 include(":app")
 include(":smollm")
+include(":langgraph-android")

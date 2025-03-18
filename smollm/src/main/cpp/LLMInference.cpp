@@ -63,6 +63,7 @@ LLMInference::loadModel(const char* model_path, float minP, float temperature, b
 
 void
 LLMInference::addChatMessage(const char* message, const char* role) {
+    LOGi("addMessage: (%s)%.50s...", strdup(role), strdup(message));
     _messages.push_back({ strdup(role), strdup(message) });
 }
 
@@ -84,7 +85,12 @@ LLMInference::startCompletion(const char* query) {
     }
     _responseGenerationTime = 0;
     _responseNumTokens      = 0;
-    addChatMessage(query, "user");
+
+    // 檢查 query 是否為 null 或空字串
+    if (query != nullptr && query[0] != '\0') {
+        addChatMessage(query, "user");
+    }
+
     // apply the chat-template
     int newLen = llama_chat_apply_template(_chatTemplate, _messages.data(), _messages.size(), true,
                                            _formattedMessages.data(), _formattedMessages.size());

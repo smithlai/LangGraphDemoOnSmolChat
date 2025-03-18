@@ -17,9 +17,21 @@
 package io.shubham0204.smollmandroid.llm
 
 import android.util.Log
+import com.smith.lai.toolcalls.langgraph.LangGraph
+import com.smith.lai.toolcalls.langgraph.model.adapter.Llama3_2_3B_LLMToolAdapter
+import com.smith.lai.toolcalls.langgraph.node.LLMNode
+import com.smith.lai.toolcalls.langgraph.node.Node.Companion.NodeNames
+import com.smith.lai.toolcalls.langgraph.node.ToolNode
+import com.smith.lai.toolcalls.langgraph.state.GraphState
+import com.smith.lai.toolcalls.langgraph.state.MessageRole
+import com.smith.lai.toolcalls.langgraph.state.StateConditions
+import com.smith.lai.toolcalls.langgraph.tools.BaseTool
+import com.smith.lai.toolcalls.langgraph.tools.example_tools.CalculatorTool
+import com.smith.lai.toolcalls.langgraph.tools.example_tools.WeatherTool
 import io.shubham0204.smollm.SmolLM
 import io.shubham0204.smollmandroid.data.Chat
 import io.shubham0204.smollmandroid.data.MessagesDB
+import io.shubham0204.smollmandroid.tools.SmolLMWithTools
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +43,13 @@ import kotlin.time.measureTime
 
 private const val LOGTAG = "[SmolLMManager-Kt]"
 private val LOGD: (String) -> Unit = { Log.d(LOGTAG, it) }
-
+/**
+ * Custom state class for managing conversation state
+ */
+class CustomChatState : GraphState() {
+    // You can add custom properties here if needed
+    var customProperty: String = ""
+}
 @Single
 class SmolLMManager(
     private val messagesDB: MessagesDB,
@@ -42,6 +60,13 @@ class SmolLMManager(
     private var chat: Chat? = null
     private var isInstanceLoaded = false
     var isInferenceOn = false
+    private val tools: List<BaseTool<*, *>> by lazy {
+        listOf(WeatherTool(), CalculatorTool())
+    }
+    // LangGraph components
+    private var conversationGraph: LangGraph<CustomChatState>? = null
+    private var customState: CustomChatState = CustomChatState()
+    private var smolLMWithTools: SmolLMWithTools = SmolLMWithTools(Llama3_2_3B_LLMToolAdapter(), instance)
 
     data class SmolLMInitParams(
         val chat: Chat,
@@ -87,10 +112,16 @@ class SmolLMManager(
                         initParams.useMlock,
                     )
                     LOGD("Model loaded")
-                    if (initParams.chat.systemPrompt.isNotEmpty()) {
-                        instance.addSystemPrompt(initParams.chat.systemPrompt)
-                        LOGD("System prompt added")
-                    }
+
+//                    if (initParams.chat.systemPrompt.isNotEmpty()) {
+//                        instance.fPrompt(initParams.chat.systemPrompt)
+//                        LOGD("System prompt added")
+//                    }
+                    // Initialize the conversation graph with tools
+                    conversationGraph = createGraph(
+                        model = smolLMWithTools,
+                        tools = tools
+                    )
                     if (!initParams.chat.isTask) {
                         messagesDB.getMessagesForModel(initParams.chat.id).forEach { message ->
                             if (message.isUserMessage) {
@@ -128,10 +159,35 @@ class SmolLMManager(
                     var response = ""
                     val duration =
                         measureTime {
-                            instance.getResponse(query).collect { piece ->
-                                response += responseTransform(piece)
-                                withContext(Dispatchers.Main) {
-                                    onPartialResponseGenerated(response)
+                            val usingGraph = true
+                            if (usingGraph) {
+                                // Add the user message to the state
+                                customState.addMessage(MessageRole.USER, query)
+
+                                // Run the graph with the current state
+                                val result = conversationGraph?.run(customState)
+
+                                // Update the current state with the result
+                                result?.let {
+                                    if (result.error?.isNotEmpty() == true) {
+                                        throw Exception("${result.error}")
+                                    } else {
+                                        val assistantResponse = it.getLastAssistantMessage()
+                                        val final_msg = assistantResponse?.content ?: ""
+                                        LOGD("LangGraph generated response: ${final_msg.take(50)}...")
+                                        response += responseTransform(final_msg)
+                                        withContext(Dispatchers.Main) {
+                                            onPartialResponseGenerated(response)
+                                        }
+                                    }
+                                }
+                            }else {
+                                // Original
+                                instance.getResponse(query).collect { piece ->
+                                    response += responseTransform(piece)
+                                    withContext(Dispatchers.Main) {
+                                        onPartialResponseGenerated(response)
+                                    }
                                 }
                             }
                         }
@@ -174,5 +230,44 @@ class SmolLMManager(
         if (job.isActive) {
             job.cancel()
         }
+    }
+    /**
+     * Creates a conversation graph with tools enabled
+     */
+    private fun createGraph(
+        model: SmolLMWithTools,
+        tools: List<BaseTool<*, *>>
+    ): LangGraph<CustomChatState> {
+        model.bind_tools(tools)
+        // 创建图构建器
+        val graphBuilder = LangGraph<CustomChatState>()
+
+        // 创建节点
+        val llmNode = LLMNode<CustomChatState>(model)
+        val toolNode = ToolNode<CustomChatState>(tools)
+
+
+        graphBuilder.addStartNode()
+        graphBuilder.addEndNode()
+        graphBuilder.addNode("llm", llmNode)
+        graphBuilder.addNode(NodeNames.TOOLS, toolNode)
+
+        // 添加边
+        graphBuilder.addEdge(NodeNames.START, "llm")
+
+        // 条件边
+        graphBuilder.addConditionalEdges(
+            "llm",
+            mapOf(
+                StateConditions.hasToolCalls<CustomChatState>() to NodeNames.TOOLS,
+                StateConditions.isComplete<CustomChatState>() to NodeNames.END
+            ),
+            defaultTarget = NodeNames.END
+        )
+
+        graphBuilder.addEdge(NodeNames.TOOLS, "llm")
+
+        // 编译并返回图
+        return graphBuilder.compile()
     }
 }

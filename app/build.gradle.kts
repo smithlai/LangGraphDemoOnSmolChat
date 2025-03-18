@@ -90,6 +90,7 @@ dependencies {
     implementation(libs.koin.annotations)
     implementation(libs.koin.androidx.compose)
     implementation(libs.androidx.ui.text.google.fonts)
+    implementation(project(":langgraph-android"))
     ksp(libs.koin.ksp.compiler)
 
     // ObjectBox: on-device NoSQL database
@@ -112,6 +113,14 @@ dependencies {
     val pagingVersion = "3.3.5"
     implementation("androidx.paging:paging-runtime:$pagingVersion")
     implementation("androidx.paging:paging-compose:$pagingVersion")
+
+
+    // for @Serialization and @Annotation
+//    implementation("org.jetbrains.kotlin:kotlin-reflect:2.1.10")
+    implementation("org.jetbrains.kotlin.plugin.serialization:org.jetbrains.kotlin.plugin.serialization.gradle.plugin:2.1.10")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+//    implementation("io.github.classgraph:classgraph:4.8.179")
+
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

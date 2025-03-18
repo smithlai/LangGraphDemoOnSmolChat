@@ -39,14 +39,14 @@ data class Chat(
     var dateUsed: Date = Date(),
     var llmModelId: Long = -1L,
     var minP: Float = 0.05f,
-    var temperature: Float = 1.0f,
+    var temperature: Float = 0.0f,
     var isTask: Boolean = false,
     var contextSize: Int = 0,
     var contextSizeConsumed: Int = 0,
     var chatTemplate: String = "",
     var nThreads: Int = 4,
     var useMmap: Boolean = true,
-    var useMlock: Boolean = false,
+    var useMlock: Boolean = true,
 )
 
 @Single

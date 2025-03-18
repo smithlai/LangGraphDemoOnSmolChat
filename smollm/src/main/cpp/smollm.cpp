@@ -57,6 +57,7 @@ Java_io_shubham0204_smollm_SmolLM_startCompletion(JNIEnv* env, jobject thiz, jlo
     jboolean    isCopy       = true;
     const char* promptCstr   = env->GetStringUTFChars(prompt, &isCopy);
     auto*       llmInference = reinterpret_cast<LLMInference*>(modelPtr);
+
     llmInference->startCompletion(promptCstr);
     env->ReleaseStringUTFChars(prompt, promptCstr);
 }

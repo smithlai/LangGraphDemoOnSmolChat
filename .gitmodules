@@ -1,3 +1,7 @@
 [submodule "llama.cpp"]
 	path = llama.cpp
 	url = https://github.com/ggerganov/llama.cpp
+
+[submodule "langgraph-android"]
+	path = langgraph-android
+	url = https://github.com/smithlai/Langgraph-Android.git

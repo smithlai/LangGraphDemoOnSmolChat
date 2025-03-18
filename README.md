@@ -1,3 +1,126 @@
+# LangGraph-Android Integration - Using ToolCalls in SmolChat
+
+This project demonstrates how to use LangGraph on Android, using SmolChat as a showcase platform for tool calls (ToolCalls).
+
+## Key Changes
+1. Added langgraph-android as a Git Submodule
+
+    - Source: LangGraph-Android
+    - Supports LangGraph tool calls (ToolCalls)
+2. Added LangGraph Tool Examples
+    - RagSearchTool: Retrieves content from the RAG database
+    - SmolLMWithTools: Adapter for integrating LLMs with ToolCalls
+    - UIBridgeTool: Controls UI actions (e.g., navigating to settings pages)
+
+3. Project Configuration Changes
+    - Added langgraph-android dependency in build.gradle.kts
+    - Enabled Kotlin serialization support
+4. Model Inference Adjustments
+
+    - Set temperature to 0.0f
+    - Enabled useMlock (true)
+    - Integrated LangGraph for conversation processing
+
+---
+
+## Import `LangGraph-Android`
+
+### 1. add `langgraph-android` Submodule
+
+
+```sh
+git submodule add https://github.com/smithlai/Langgraph-Android.git langgraph-android
+git submodule update --init --recursive
+```
+#### /settings.gradle.kts
+```kotlin
+include(":langgraph-android")
+```
+
+#### app/build.gradle.kts
+```kotlin
+dependencies {
+    implementation(project(":langgraph-android"))
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+}
+```
+### 2. Create SmolLMWithTools Adapter
+建立 SmolLMWithTools.kt 來封裝 SmolLM，使其兼容 LangGraph：
+
+```kotlin
+class SmolLMWithTools(adapter: BaseLLMToolAdapter, val smolLM: SmolLM) : LLMWithTools(adapter) {
+
+    override suspend fun init_model() {}
+
+    override suspend fun close_model() {
+        smolLM.close()
+    }
+
+    override fun addSystemMessage(content: String) {
+        smolLM.addSystemPrompt(content)
+    }
+
+    override fun addUserMessage(content: String) {
+        smolLM.addUserMessage(content)
+    }
+
+    override fun getResponse(query: String?): Flow<String> {
+        return smolLM.getResponse(query ?: "")
+    }
+}
+
+```
+### 3. Setting up LangGraph
+```kotlin
+private var conversationGraph: LangGraph<CustomChatState>? = null
+private var customState: CustomChatState = CustomChatState()
+private var smolLMWithTools: SmolLMWithTools = SmolLMWithTools(Llama3_2_3B_LLMToolAdapter(), instance)
+
+init {
+    conversationGraph = createGraph(smolLMWithTools, listOf(RagSearchTool(), UIBridgeTool()))
+}
+
+private fun createGraph(
+    model: SmolLMWithTools,
+    tools: List<BaseTool<*, *>>
+): LangGraph<CustomChatState> {
+
+    model.bind_tools(tools) // <------important
+    val graphBuilder = LangGraph<CustomChatState>()
+
+    val llmNode = LLMNode<CustomChatState>(model)
+    val toolNode = ToolNode<CustomChatState>(tools) // <----important
+
+    graphBuilder.addStartNode()
+    graphBuilder.addNode("llm", llmNode)
+    graphBuilder.addNode(NodeNames.TOOLS, toolNode)
+
+    graphBuilder.addConditionalEdges(
+        "llm",
+        mapOf(StateConditions.hasToolCalls<CustomChatState>() to NodeNames.TOOLS),
+        defaultTarget = NodeNames.END
+    )
+
+    graphBuilder.addEdge(NodeNames.TOOLS, "llm")
+    return graphBuilder.compile()
+}
+
+```
+```kotlin
+val userQuery = "The weather of tokyo?"
+customState.addMessage(MessageRole.USER, userQuery)
+
+val result = conversationGraph?.run(customState)
+println("AI 回應: ${result?.getLastAssistantMessage()?.content}")
+```
+
+#### 4. Note
+1. Why `temperature` set to `0.0f`:
+    A higher temperature will make llm failed to generate correct tool format.
+2. You can refer to `SmolLMWithTools.kt` and `Llama3_2_3B_LLMToolAdapter.kt` to  
+   create custom adapters for different LLMs.
+--------------------------------------------------
+
 # SmolChat - On-Device Inference of SLMs in Android
 
 <table>
