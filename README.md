@@ -39,6 +39,12 @@ include(":langgraph-android")
 
 #### app/build.gradle.kts
 ```kotlin
+plugins {
+    // fix:
+    // Serializer for class 'XXXXXXXX' is not found.
+    // Please ensure that class is marked as '@Serializable' and that the serialization compiler plugin is applied.
+    id ("kotlinx-serialization")
+}
 dependencies {
     implementation(project(":langgraph-android"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")

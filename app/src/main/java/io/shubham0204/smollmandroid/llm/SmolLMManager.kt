@@ -60,8 +60,8 @@ class SmolLMManager(
     private var chat: Chat? = null
     private var isInstanceLoaded = false
     var isInferenceOn = false
-    private val tools: List<BaseTool<*, *>> by lazy {
-        listOf(WeatherTool(), CalculatorTool())
+    private val tools: MutableList<BaseTool<*, *>> by lazy {
+        mutableListOf(WeatherTool(), CalculatorTool())
     }
     // LangGraph components
     private var conversationGraph: LangGraph<CustomChatState>? = null
@@ -87,7 +87,14 @@ class SmolLMManager(
         val generationTimeSecs: Int,
         val contextLengthUsed: Int,
     )
-
+    fun bind_tools(new_tools: List<BaseTool<*, *>>){
+        tools.addAll(new_tools)
+        //update graph
+        conversationGraph = createGraph(
+            model = smolLMWithTools,
+            tools = tools
+        )
+    }
     fun create(
         initParams: SmolLMInitParams,
         onError: (Exception) -> Unit,

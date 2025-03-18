@@ -24,6 +24,7 @@ import android.util.Log
 import android.util.TypedValue
 import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.Markwon
 import io.noties.markwon.core.CorePlugin
@@ -44,10 +45,14 @@ import io.shubham0204.smollmandroid.data.TasksDB
 import io.shubham0204.smollmandroid.llm.ModelsRepository
 import io.shubham0204.smollmandroid.llm.SmolLMManager
 import io.shubham0204.smollmandroid.prism4j.PrismGrammarLocator
+import io.shubham0204.smollmandroid.tools.UIBridgeTool
 import io.shubham0204.smollmandroid.ui.components.createAlertDialog
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
 import java.util.Date
 
@@ -99,6 +104,24 @@ class ChatScreenViewModel(
     var responseGenerationTimeSecs: Int? = null
     val markwon: Markwon
 
+    private val _navigationEvent = MutableSharedFlow<String>()
+    val navigationEvent = _navigationEvent.asSharedFlow()
+    val uiBridgeTool: UIBridgeTool = UIBridgeTool().apply {
+        setNavigateCallback { cmd ->
+            // Handle the navigation command
+            when (cmd) {
+                "chat_setting" ->
+                    viewModelScope.launch {
+                        showMoreOptionsPopup()
+                    }
+                "rag_setting" ->
+                    viewModelScope.launch {
+                        _navigationEvent.emit(value = "rag_setting")
+                    }
+                else -> Log.d("Navigation", "Unknown command: $cmd")
+            }
+        }
+    }
     init {
         _currChatState.value = chatsDB.loadDefaultChat()
         val prism4j = Prism4j(PrismGrammarLocator())
@@ -279,6 +302,7 @@ class ChatScreenViewModel(
                     },
                     onSuccess = {
                         _modelLoadState.value = ModelLoadingState.SUCCESS
+                        smolLMManager.bind_tools(listOf(uiBridgeTool))
                     },
                 )
             }
