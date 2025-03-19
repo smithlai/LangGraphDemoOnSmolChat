@@ -54,6 +54,7 @@ class CustomChatState : GraphState() {
 class SmolLMManager(
     private val messagesDB: MessagesDB,
 ) {
+    private val HIDDEN_SIG = "(HIDDEN)"
     private val instance = SmolLM()
     private var responseGenerationJob: Job? = null
     private var modelInitJob: Job? = null
@@ -131,12 +132,15 @@ class SmolLMManager(
                     )
                     if (!initParams.chat.isTask) {
                         messagesDB.getMessagesForModel(initParams.chat.id).forEach { message ->
-                            if (message.isUserMessage) {
-                                instance.addUserMessage(message.message)
-                                LOGD("User message added: ${message.message}")
-                            } else {
-                                instance.addAssistantMessage(message.message)
-                                LOGD("Assistant message added: ${message.message}")
+                            //don't put hidden message back
+                            if (!message.message.startsWith(HIDDEN_SIG)) {
+                                if (message.isUserMessage) {
+                                    instance.addUserMessage(message.message)
+                                    LOGD("User message added: ${message.message}")
+                                } else {
+                                    instance.addAssistantMessage(message.message)
+                                    LOGD("Assistant message added: ${message.message}")
+                                }
                             }
                         }
                     }
@@ -274,6 +278,16 @@ class SmolLMManager(
 
         graphBuilder.addEdge(NodeNames.TOOLS, "llm")
 
+        graphBuilder.setOnMessageCallback { message ->
+            // 更新UI顯示進度
+            withContext(Dispatchers.Main) {
+                when (message.role){
+                    MessageRole.ASSISTANT -> messagesDB.addAssistantMessage(chat!!.id, HIDDEN_SIG+message.content)
+                    MessageRole.TOOL -> messagesDB.addUserMessage(chat!!.id, HIDDEN_SIG+message.content)
+                    else ->{messagesDB.addAssistantMessage(chat!!.id, "$HIDDEN_SIG(Error)[${message.role}]"+message.content)}
+                }
+            }
+        }
         // 编译并返回图
         return graphBuilder.compile()
     }

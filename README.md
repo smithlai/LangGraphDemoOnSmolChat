@@ -1,197 +1,65 @@
-# LangGraph-Android Integration - Using langgraph and tool calls and RAG in SmolChat
+# LangGraph & RAG Integration for SmolChat Android
 
-This project demonstrates how to use LangGraph on Android, using SmolChat as a showcase platform for tool calls (ToolCalls).
+This project demonstrates how to use LangGraph and RAG (Retrieval Augmented Generation) on Android, using SmolChat as a platform for tool calls.
 
-## Key Changes
-1. Added langgraph-android as a Git Submodule
+## Features
 
-    - Source: [LangGraph-Android](https://github.com/smithlai/Langgraph-Android.git)
-    - Supports LangGraph tool calls (ToolCalls)
-2. Added LangGraph Tool Examples
-    - RagSearchTool: Retrieves content from the RAG database
-    - SmolLMWithTools: Adapter for integrating LLMs with ToolCalls
-    - UIBridgeTool: Controls UI actions (e.g., navigating to settings pages)
+- **Tool Calls Support**: Use LangGraph for structured tool invocation in LLMs
+- **RAG Integration**: Enhance LLM responses with contextual information from documents
+- **UI Integration**: Access RAG functionality directly from the chat interface
+- **Low-Resource Optimization**: Configured for efficient on-device operation
 
-3. Project Configuration Changes
-    - Added langgraph-android dependency in build.gradle.kts
-    - Enabled Kotlin serialization support
-4. Model Inference Adjustments
+## Getting Started
 
-    - Set temperature to 0.0f
-    - Enabled useMlock (true)
-    - Integrated LangGraph for conversation processing
-5. Added RAG-android as a Git Submodule
+### Prerequisites
 
-    - Source: [RAG-Android](https://github.com/smithlai/RAG-Android.git)
-    - Provides Retrieval-Augmented Generation capabilities
-    - Enables contextual search through document chunks
-    - Enhances LLM responses with relevant information from stored documents
-    
----
+- Android Studio Arctic Fox or newer
+- Android device with API level 26+ (Android 8.0+)
+- 4GB+ RAM recommended for model inference
 
-## Import `LangGraph-Android`
+### Setup
 
-### 1. add `langgraph-android` Submodule
+1. **Clone the repository with submodules**:
+   ```bash
+   git clone -b langgraph https://github.com/smithlai/LangGraphDemoOnSmolChat.git
+   cd LangGraphDemoOnSmolChat
+   git submodule update --init --recursive
+   ```
+   
+The `git submodule update` command initializes both LangGraph and RAG modules automatically.
 
 
-```sh
-git submodule add https://github.com/smithlai/Langgraph-Android.git langgraph-android
-git submodule update --init --recursive
-```
-#### /settings.gradle.kts
-```kotlin
-include(":langgraph-android")
-```
+2. **Open in Android Studio**:
+   - Open Android Studio
+   - Select "Open an Existing Project"
+   - Navigate to the cloned directory and open it
 
-#### app/build.gradle.kts
-```kotlin
-plugins {
-    // fix:
-    // Serializer for class 'XXXXXXXX' is not found.
-    // Please ensure that class is marked as '@Serializable' and that the serialization compiler plugin is applied.
-    id ("kotlinx-serialization")
-}
-dependencies {
-    implementation(project(":langgraph-android"))
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
-}
-```
-### 2. Create SmolLMWithTools Adapter
-建立 SmolLMWithTools.kt 來封裝 SmolLM，使其兼容 LangGraph：
+3. **Build the project**:
+   - Android Studio should automatically sync and build the project
+   - If it doesn't, select **Build > Rebuild Project**
 
-```kotlin
-class SmolLMWithTools(adapter: BaseLLMToolAdapter, val smolLM: SmolLM) : LLMWithTools(adapter) {
-
-    override suspend fun init_model() {}
-
-    override suspend fun close_model() {
-        smolLM.close()
-    }
-
-    override fun addSystemMessage(content: String) {
-        smolLM.addSystemPrompt(content)
-    }
-
-    override fun addUserMessage(content: String) {
-        smolLM.addUserMessage(content)
-    }
-
-    override fun getResponse(query: String?): Flow<String> {
-        return smolLM.getResponse(query ?: "")
-    }
-}
-
-```
-### 3. Setting up LangGraph
-```kotlin
-private var conversationGraph: LangGraph<CustomChatState>? = null
-private var customState: CustomChatState = CustomChatState()
-private var smolLMWithTools: SmolLMWithTools = SmolLMWithTools(Llama3_2_3B_LLMToolAdapter(), instance)
-
-init {
-    conversationGraph = createGraph(smolLMWithTools, listOf(RagSearchTool(), UIBridgeTool()))
-}
-
-private fun createGraph(
-    model: SmolLMWithTools,
-    tools: List<BaseTool<*, *>>
-): LangGraph<CustomChatState> {
-
-    model.bind_tools(tools) // <------important
-    val graphBuilder = LangGraph<CustomChatState>()
-
-    val llmNode = LLMNode<CustomChatState>(model)
-    val toolNode = ToolNode<CustomChatState>(tools) // <----important
-
-    graphBuilder.addStartNode()
-    graphBuilder.addNode("llm", llmNode)
-    graphBuilder.addNode(NodeNames.TOOLS, toolNode)
-
-    graphBuilder.addConditionalEdges(
-        "llm",
-        mapOf(StateConditions.hasToolCalls<CustomChatState>() to NodeNames.TOOLS),
-        defaultTarget = NodeNames.END
-    )
-
-    graphBuilder.addEdge(NodeNames.TOOLS, "llm")
-    return graphBuilder.compile()
-}
-
-```
-```kotlin
-val userQuery = "The weather of tokyo?"
-customState.addMessage(MessageRole.USER, userQuery)
-
-val result = conversationGraph?.run(customState)
-println("AI 回應: ${result?.getLastAssistantMessage()?.content}")
-```
-
-#### 4. Note
-1. Why `temperature` set to `0.0f`:
-    A higher temperature will make llm failed to generate correct tool format.
-2. You can refer to `SmolLMWithTools.kt` and `Llama3_2_3B_LLMToolAdapter.kt` to  
-   create custom adapters for different LLMs.
-
-*app/build.gradle.kts*
-```kotlin
-//  Duplicate class org.intellij.lang.annotations.Flow found in modules annotations-23.0.0.jar -> annotations-23.0.0 (org.jetbrains:annotations:23.0.0) and annotations-java5-17.0.0.jar -> annotations-java5-17.0.0 (org.jetbrains:annotations-java5:17.0.0)
-configurations {
-    create("cleanedAnnotations")
-    implementation {
-        exclude(group = "org.jetbrains", module = "annotations")
-    }
-}
-```
+4. **Run on a device**:
+   - Connect an Android device to your computer
+   - Select your device in the toolbar dropdown
+   - Click the Run button (green triangle)
 
 
-## Add rag-android Submodule
+## Creating Your Own Tools & Graphs
 
-You can refer to `rag-android/Readme.md` as well
-```sh
-git submodule add https://github.com/smithlai/RAG-Android.git rag-android
-git submodule update --init --recursive
-```
+To create your own custom tools and LangGraph configurations, please refer to the documentation in the [langgraph-android repository](https://github.com/smithlai/Langgraph-Android). 
 
-#### /settings.gradle.kts
-```kotlin
-include(":rag-android")
-```
+The repository contains detailed instructions, examples, and best practices for:
+- Creating custom tool classes
+- Defining tool inputs and outputs
+- Setting up LangGraph configurations
+- Managing tool call state
+- Implementing custom nodes and edges
 
-#### app/build.gradle.kts
-```kotlin
-plugins {
-    // fix:
-    // Serializer for class 'XXXXXXXX' is not found.
-    // Please ensure that class is marked as '@Serializable' and that the serialization compiler plugin is applied.
-    id ("kotlinx-serialization")
-}
-dependencies {
-    implementation(project(":rag-android"))
-}
-```
-#### app/Application
-```kotlin
-class XXXApplication : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        startKoin {
-            androidContext(this@SmolChatApplication)
-            modules(
-                listOf(
-                    KoinAppModule().module,
-                    SmithRagModule().module // 添加 Android module 的 Koin module
-                )
-            )
-        }
-        ...
-        ...
-    }
-    ObjectBoxStore.init(this)
-    com.smith.smith_rag.data.ObjectBoxStore.init(this)
-}
-```
+For RAG-specific functionality, refer to the documentation in the [rag-android repository](https://github.com/smithlai/RAG-Android).
 
-
+--------------------------------------------------
+--------------------------------------------------
+--------------------------------------------------
 --------------------------------------------------
 
 # SmolChat - On-Device Inference of SLMs in Android
