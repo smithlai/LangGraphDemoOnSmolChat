@@ -27,6 +27,7 @@ import com.smith.lai.toolcalls.langgraph.state.MessageRole
 import com.smith.lai.toolcalls.langgraph.state.StateConditions
 import com.smith.lai.toolcalls.langgraph.tools.BaseTool
 import com.smith.lai.toolcalls.langgraph.tools.example_tools.CalculatorTool
+import com.smith.lai.toolcalls.langgraph.tools.example_tools.ToolToday
 import com.smith.lai.toolcalls.langgraph.tools.example_tools.WeatherTool
 import io.shubham0204.smollm.SmolLM
 import io.shubham0204.smollmandroid.data.Chat
@@ -54,16 +55,14 @@ class CustomChatState : GraphState() {
 class SmolLMManager(
     private val messagesDB: MessagesDB,
 ) {
-    private val HIDDEN_SIG = "(HIDDEN)"
+    private val HIDDEN_SIG = "(LANG_GRAPH)"
     private val instance = SmolLM()
     private var responseGenerationJob: Job? = null
     private var modelInitJob: Job? = null
     private var chat: Chat? = null
     private var isInstanceLoaded = false
     var isInferenceOn = false
-    private val tools: MutableList<BaseTool<*, *>> by lazy {
-        mutableListOf(WeatherTool(), CalculatorTool())
-    }
+
     // LangGraph components
     private var conversationGraph: LangGraph<CustomChatState>? = null
     private var customState: CustomChatState = CustomChatState()
@@ -88,6 +87,9 @@ class SmolLMManager(
         val generationTimeSecs: Int,
         val contextLengthUsed: Int,
     )
+    private val tools: MutableList<BaseTool<*, *>> by lazy {
+        mutableListOf(WeatherTool(), ToolToday())
+    }
     fun bind_tools(new_tools: List<BaseTool<*, *>>){
         tools.addAll(new_tools)
         //update graph
@@ -172,6 +174,17 @@ class SmolLMManager(
                         measureTime {
                             val usingGraph = true
                             if (usingGraph) {
+
+                                conversationGraph?.setOnMessageCallback { message ->
+                                    // run time update UI to display hidden messages in graph
+                                    withContext(Dispatchers.Main) {
+                                        when (message.role){
+                                            MessageRole.ASSISTANT -> messagesDB.addAssistantMessage(chat!!.id, "$HIDDEN_SIG[${message.role}]"+message.content)
+                                            MessageRole.TOOL -> messagesDB.addUserMessage(chat!!.id, "$HIDDEN_SIG[${message.role}]"+message.content)
+                                            else ->{messagesDB.addAssistantMessage(chat!!.id, "$HIDDEN_SIG(Error)[${message.role}]"+message.content)}
+                                        }
+                                    }
+                                }
                                 // Add the user message to the state
                                 customState.addMessage(MessageRole.USER, query)
 
@@ -278,16 +291,6 @@ class SmolLMManager(
 
         graphBuilder.addEdge(NodeNames.TOOLS, "llm")
 
-        graphBuilder.setOnMessageCallback { message ->
-            // 更新UI顯示進度
-            withContext(Dispatchers.Main) {
-                when (message.role){
-                    MessageRole.ASSISTANT -> messagesDB.addAssistantMessage(chat!!.id, HIDDEN_SIG+message.content)
-                    MessageRole.TOOL -> messagesDB.addUserMessage(chat!!.id, HIDDEN_SIG+message.content)
-                    else ->{messagesDB.addAssistantMessage(chat!!.id, "$HIDDEN_SIG(Error)[${message.role}]"+message.content)}
-                }
-            }
-        }
         // 编译并返回图
         return graphBuilder.compile()
     }
