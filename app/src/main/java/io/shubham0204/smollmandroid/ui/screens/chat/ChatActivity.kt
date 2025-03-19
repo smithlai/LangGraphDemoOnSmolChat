@@ -96,6 +96,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.smith.smith_rag.ui.screens.chat.RAGChatScreen
+import com.smith.smith_rag.ui.screens.docs.DocsScreen
+import com.smith.smith_rag.ui.screens.edit_api_key.EditAPIKeyScreen
 import io.shubham0204.smollmandroid.R
 import io.shubham0204.smollmandroid.data.Chat
 import io.shubham0204.smollmandroid.ui.components.AppBarTitleText
@@ -133,8 +136,19 @@ class ChatActivity : ComponentActivity() {
                     ChatActivityScreenUI(
                         viewModel,
                         onEditChatParamsClick = { navController.navigate("edit-chat") },
+                        onRAGChatClick = { navController.navigate("chat2") }
                     )
                 }
+                composable("chat2") {
+                    RAGChatScreen(
+                        onOpenDocsClick = {navController.navigate("docs")},
+                        onEditAPIKeyClick = {
+                            navController.navigate("edit-api-key")
+                        }
+                    )
+                }
+                composable("docs") { DocsScreen(onBackClick = { navController.navigateUp() }) }
+                composable("edit-api-key") { EditAPIKeyScreen(onBackClick = { navController.navigateUp() }) }
             }
         }
     }
@@ -164,9 +178,31 @@ class ChatActivity : ComponentActivity() {
 fun ChatActivityScreenUI(
     viewModel: ChatScreenViewModel,
     onEditChatParamsClick: () -> Unit,
+    onRAGChatClick: () -> Unit
 ) {
     val context = LocalContext.current
     val currChat by viewModel.currChatState.collectAsStateWithLifecycle(lifecycleOwner = LocalLifecycleOwner.current)
+
+
+    LaunchedEffect(Unit) {
+        viewModel.navigationEvent.collect { command ->
+            when(command){
+                "chat_setting" -> {
+                    // This is processed in viewModel
+                    //viewModel.showMoreOptionsPopup()
+                }
+                "rag_setting" -> {
+                    onRAGChatClick()
+                }
+                else -> {
+                    Log.e("viewModel.navigationEvent.collect", "invalid command: ${command}")
+                }
+            }
+
+        }
+    }
+
+
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     LaunchedEffect(currChat) { viewModel.loadModel() }
@@ -234,7 +270,10 @@ fun ChatActivityScreenUI(
                                             contentDescription = "Options",
                                         )
                                     }
-                                    ChatMoreOptionsPopup(viewModel, onEditChatParamsClick)
+                                    ChatMoreOptionsPopup(viewModel,
+                                        onEditChatParamsClick,
+                                        onRAGChatClick
+                                    )
                                 }
                             }
                         },

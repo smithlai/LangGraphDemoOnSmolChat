@@ -1,11 +1,11 @@
-# LangGraph-Android Integration - Using ToolCalls in SmolChat
+# LangGraph-Android Integration - Using langgraph and tool calls and RAG in SmolChat
 
 This project demonstrates how to use LangGraph on Android, using SmolChat as a showcase platform for tool calls (ToolCalls).
 
 ## Key Changes
 1. Added langgraph-android as a Git Submodule
 
-    - Source: LangGraph-Android
+    - Source: [LangGraph-Android](https://github.com/smithlai/Langgraph-Android.git)
     - Supports LangGraph tool calls (ToolCalls)
 2. Added LangGraph Tool Examples
     - RagSearchTool: Retrieves content from the RAG database
@@ -20,7 +20,13 @@ This project demonstrates how to use LangGraph on Android, using SmolChat as a s
     - Set temperature to 0.0f
     - Enabled useMlock (true)
     - Integrated LangGraph for conversation processing
+5. Added RAG-android as a Git Submodule
 
+    - Source: [RAG-Android](https://github.com/smithlai/RAG-Android.git)
+    - Provides Retrieval-Augmented Generation capabilities
+    - Enables contextual search through document chunks
+    - Enhances LLM responses with relevant information from stored documents
+    
 ---
 
 ## Import `LangGraph-Android`
@@ -125,6 +131,67 @@ println("AI 回應: ${result?.getLastAssistantMessage()?.content}")
     A higher temperature will make llm failed to generate correct tool format.
 2. You can refer to `SmolLMWithTools.kt` and `Llama3_2_3B_LLMToolAdapter.kt` to  
    create custom adapters for different LLMs.
+
+*app/build.gradle.kts*
+```kotlin
+//  Duplicate class org.intellij.lang.annotations.Flow found in modules annotations-23.0.0.jar -> annotations-23.0.0 (org.jetbrains:annotations:23.0.0) and annotations-java5-17.0.0.jar -> annotations-java5-17.0.0 (org.jetbrains:annotations-java5:17.0.0)
+configurations {
+    create("cleanedAnnotations")
+    implementation {
+        exclude(group = "org.jetbrains", module = "annotations")
+    }
+}
+```
+
+
+## Add rag-android Submodule
+
+You can refer to `rag-android/Readme.md` as well
+```sh
+git submodule add https://github.com/smithlai/RAG-Android.git rag-android
+git submodule update --init --recursive
+```
+
+#### /settings.gradle.kts
+```kotlin
+include(":rag-android")
+```
+
+#### app/build.gradle.kts
+```kotlin
+plugins {
+    // fix:
+    // Serializer for class 'XXXXXXXX' is not found.
+    // Please ensure that class is marked as '@Serializable' and that the serialization compiler plugin is applied.
+    id ("kotlinx-serialization")
+}
+dependencies {
+    implementation(project(":rag-android"))
+}
+```
+#### app/Application
+```kotlin
+class XXXApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        startKoin {
+            androidContext(this@SmolChatApplication)
+            modules(
+                listOf(
+                    KoinAppModule().module,
+                    SmithRagModule().module // 添加 Android module 的 Koin module
+                )
+            )
+        }
+        ...
+        ...
+    }
+    ObjectBoxStore.init(this)
+    com.smith.smith_rag.data.ObjectBoxStore.init(this)
+}
+```
+
+
 --------------------------------------------------
 
 # SmolChat - On-Device Inference of SLMs in Android

@@ -25,6 +25,8 @@ import android.util.TypedValue
 import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.smith.smith_rag.data.ChunksDB
+import com.smith.smith_rag.embeddings.SentenceEmbeddingProvider
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.Markwon
 import io.noties.markwon.core.CorePlugin
@@ -45,6 +47,7 @@ import io.shubham0204.smollmandroid.data.TasksDB
 import io.shubham0204.smollmandroid.llm.ModelsRepository
 import io.shubham0204.smollmandroid.llm.SmolLMManager
 import io.shubham0204.smollmandroid.prism4j.PrismGrammarLocator
+import io.shubham0204.smollmandroid.tools.RagSearchTool
 import io.shubham0204.smollmandroid.tools.UIBridgeTool
 import io.shubham0204.smollmandroid.ui.components.createAlertDialog
 import kotlinx.coroutines.flow.Flow
@@ -67,6 +70,9 @@ class ChatScreenViewModel(
     val modelsRepository: ModelsRepository,
     val tasksDB: TasksDB,
     val smolLMManager: SmolLMManager,
+    // for RAG
+    private val chunksDB: ChunksDB,
+    private val sentenceEncoder: SentenceEmbeddingProvider,
 ) : ViewModel() {
     enum class ModelLoadingState {
         NOT_LOADED, // model loading not started
@@ -106,6 +112,7 @@ class ChatScreenViewModel(
 
     private val _navigationEvent = MutableSharedFlow<String>()
     val navigationEvent = _navigationEvent.asSharedFlow()
+    val ragTool = RagSearchTool(chunksDB, sentenceEncoder)
     val uiBridgeTool: UIBridgeTool = UIBridgeTool().apply {
         setNavigateCallback { cmd ->
             // Handle the navigation command
@@ -302,7 +309,7 @@ class ChatScreenViewModel(
                     },
                     onSuccess = {
                         _modelLoadState.value = ModelLoadingState.SUCCESS
-                        smolLMManager.bind_tools(listOf(uiBridgeTool))
+                        smolLMManager.bind_tools(listOf(uiBridgeTool, ragTool))
                     },
                 )
             }

@@ -30,3 +30,4 @@ rootProject.name = "Langgraph on SmolChat Android"
 include(":app")
 include(":smollm")
 include(":langgraph-android")
+include(":rag-android")

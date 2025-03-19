@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp")
     id ("kotlinx-serialization")
+    id("io.objectbox")
 }
 
 android {
@@ -59,6 +60,7 @@ android {
             }
         }
     }
+//  Duplicate class org.intellij.lang.annotations.Flow found in modules annotations-23.0.0.jar -> annotations-23.0.0 (org.jetbrains:annotations:23.0.0) and annotations-java5-17.0.0.jar -> annotations-java5-17.0.0 (org.jetbrains:annotations-java5:17.0.0)
     configurations {
         create("cleanedAnnotations")
         implementation {
@@ -85,7 +87,7 @@ dependencies {
 
     implementation(project(":smollm"))
     implementation(project(":hf-model-hub-api"))
-
+    implementation(project(":rag-android"))
     // Koin: dependency injection
     implementation(libs.koin.android)
     implementation(libs.koin.annotations)
@@ -95,8 +97,8 @@ dependencies {
     ksp(libs.koin.ksp.compiler)
 
     // ObjectBox: on-device NoSQL database
-    debugImplementation("io.objectbox:objectbox-android-objectbrowser:4.0.3")
-    releaseImplementation("io.objectbox:objectbox-android:4.0.3")
+//    debugImplementation("io.objectbox:objectbox-android-objectbrowser:4.0.3")
+//    releaseImplementation("io.objectbox:objectbox-android:4.0.3")
 
     // compose-markdown: Markdown rendering in Compose
     implementation("io.noties.markwon:core:4.6.2")
@@ -132,4 +134,4 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 }
 
-apply(plugin = "io.objectbox")
+//apply(plugin = "io.objectbox")

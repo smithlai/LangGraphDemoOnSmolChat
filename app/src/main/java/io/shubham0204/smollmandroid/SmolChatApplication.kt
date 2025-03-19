@@ -17,6 +17,7 @@
 package io.shubham0204.smollmandroid
 
 import android.app.Application
+import com.smith.smith_rag.di.SmithRagModule
 import io.shubham0204.smollmandroid.data.ObjectBoxStore
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -27,8 +28,13 @@ class SmolChatApplication : Application() {
         super.onCreate()
         startKoin {
             androidContext(this@SmolChatApplication)
-            modules(KoinAppModule().module)
+            modules(
+                listOf(
+                    KoinAppModule().module,
+                    SmithRagModule().module // Changed to access the generated module
+                ))
         }
         ObjectBoxStore.init(this)
+        com.smith.smith_rag.data.ObjectBoxStore.init(this)
     }
 }
