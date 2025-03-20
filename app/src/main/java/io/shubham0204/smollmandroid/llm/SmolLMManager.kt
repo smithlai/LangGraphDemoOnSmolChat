@@ -23,10 +23,10 @@ import com.smith.lai.toolcalls.langgraph.node.LLMNode
 import com.smith.lai.toolcalls.langgraph.node.Node.Companion.NodeNames
 import com.smith.lai.toolcalls.langgraph.node.ToolNode
 import com.smith.lai.toolcalls.langgraph.state.GraphState
+import com.smith.lai.toolcalls.langgraph.state.Message
 import com.smith.lai.toolcalls.langgraph.state.MessageRole
 import com.smith.lai.toolcalls.langgraph.state.StateConditions
 import com.smith.lai.toolcalls.langgraph.tools.BaseTool
-import com.smith.lai.toolcalls.langgraph.tools.example_tools.CalculatorTool
 import com.smith.lai.toolcalls.langgraph.tools.example_tools.ToolToday
 import com.smith.lai.toolcalls.langgraph.tools.example_tools.WeatherTool
 import io.shubham0204.smollm.SmolLM
@@ -155,7 +155,29 @@ class SmolLMManager(
             onError(e)
         }
     }
-
+    suspend fun showGraphMessages(message_list: List<Message>){
+        withContext(Dispatchers.Main) {
+            message_list.forEach { message ->
+                when (message.role){
+                    MessageRole.ASSISTANT -> {
+                        val s = "$HIDDEN_SIG[${message.role}]"+message.content
+                        Log.e("aaaaa", "adding $s")
+                        messagesDB.addAssistantMessage(chat!!.id, "$HIDDEN_SIG[${message.role}]"+message.content)
+                    }
+                    MessageRole.TOOL -> {
+                        val s = "$HIDDEN_SIG[${message.role}]"+message.content
+                        Log.e("aaaaa", "adding $s")
+                        messagesDB.addUserMessage(chat!!.id, s)
+                    }
+                    else ->{
+                        val s = "$HIDDEN_SIG(Error)[${message.role}]"+message.content
+                        Log.e("aaaaa", "adding $s")
+                        messagesDB.addAssistantMessage(chat!!.id, s)
+                    }
+                }
+            }
+        }
+    }
     fun getResponse(
         query: String,
         responseTransform: (String) -> String,
@@ -174,17 +196,45 @@ class SmolLMManager(
                         measureTime {
                             val usingGraph = true
                             if (usingGraph) {
+                                // 創建圖（如果需要）
+                                if (conversationGraph == null) {
+                                    conversationGraph = createGraph(
+                                        model = smolLMWithTools,
+                                        tools = tools
+                                    )
+                                }
 
-                                conversationGraph?.setOnMessageCallback { message ->
-                                    // run time update UI to display hidden messages in graph
-                                    withContext(Dispatchers.Main) {
-                                        when (message.role){
-                                            MessageRole.ASSISTANT -> messagesDB.addAssistantMessage(chat!!.id, "$HIDDEN_SIG[${message.role}]"+message.content)
-                                            MessageRole.TOOL -> messagesDB.addUserMessage(chat!!.id, "$HIDDEN_SIG[${message.role}]"+message.content)
-                                            else ->{messagesDB.addAssistantMessage(chat!!.id, "$HIDDEN_SIG(Error)[${message.role}]"+message.content)}
+                                // 這邊只用來做動態回應展示
+                                val queueing_messages = mutableListOf<Message>()
+                                conversationGraph?.getNode("llm")?.takeIf { it is LLMNode }.let {
+                                    val llmNode = it as LLMNode
+                                    llmNode.setProgressCallback { part ->
+
+                                        val temp = mutableListOf<Message>().apply {
+                                            addAll(queueing_messages)
+                                        }
+                                        queueing_messages.clear()
+                                        showGraphMessages(temp)
+
+                                        val transformed = responseTransform(part)
+                                        withContext(Dispatchers.Main) {
+                                            onPartialResponseGenerated(transformed)
                                         }
                                     }
                                 }
+
+                                conversationGraph?.setOnNodeCompleteCallback { message_list ->
+                                    // run time update UI to display hidden messages in graph
+                                    if (message_list.isNotEmpty()) {
+                                        val temp = mutableListOf<Message>().apply {
+                                            addAll(queueing_messages)
+                                        }
+                                        queueing_messages.clear()
+                                        showGraphMessages(temp)
+                                        queueing_messages.addAll(message_list)
+                                    }
+                                }
+
                                 // Add the user message to the state
                                 customState.addMessage(MessageRole.USER, query)
 
@@ -199,13 +249,13 @@ class SmolLMManager(
                                         val assistantResponse = it.getLastAssistantMessage()
                                         val final_msg = assistantResponse?.content ?: ""
                                         LOGD("LangGraph generated response: ${final_msg.take(50)}...")
-                                        response += responseTransform(final_msg)
+                                        response = responseTransform(final_msg)
                                         withContext(Dispatchers.Main) {
-                                            onPartialResponseGenerated(response)
+                                            onPartialResponseGenerated("")
                                         }
                                     }
                                 }
-                            }else {
+                            } else {
                                 // Original
                                 instance.getResponse(query).collect { piece ->
                                     response += responseTransform(piece)
@@ -263,23 +313,22 @@ class SmolLMManager(
         tools: List<BaseTool<*, *>>
     ): LangGraph<CustomChatState> {
         model.bind_tools(tools)
-        // 创建图构建器
+        // 創建圖構建器
         val graphBuilder = LangGraph<CustomChatState>()
 
-        // 创建节点
+        // 創建節點，初始不設置回調
         val llmNode = LLMNode<CustomChatState>(model)
         val toolNode = ToolNode<CustomChatState>(tools)
-
 
         graphBuilder.addStartNode()
         graphBuilder.addEndNode()
         graphBuilder.addNode("llm", llmNode)
         graphBuilder.addNode(NodeNames.TOOLS, toolNode)
 
-        // 添加边
+        // 添加邊
         graphBuilder.addEdge(NodeNames.START, "llm")
 
-        // 条件边
+        // 條件邊
         graphBuilder.addConditionalEdges(
             "llm",
             mapOf(
@@ -291,7 +340,7 @@ class SmolLMManager(
 
         graphBuilder.addEdge(NodeNames.TOOLS, "llm")
 
-        // 编译并返回图
+        // 編譯並返回圖
         return graphBuilder.compile()
     }
 }
