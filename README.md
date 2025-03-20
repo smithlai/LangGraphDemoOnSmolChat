@@ -9,6 +9,18 @@ This project demonstrates how to use LangGraph and RAG (Retrieval Augmented Gene
 - **UI Integration**: Access RAG functionality directly from the chat interface
 - **Low-Resource Optimization**: Configured for efficient on-device operation
 
+
+<div align="center">
+  <img src="./screenshots/tool_calls1.png" width="45%">
+  <p>Tool call demo 1 (query data)</p>
+  
+  <img src="./screenshots/tool_calls2.png" width="45%">
+  <p>tool calls demo 2 (UI control)</p>
+  <img src="./screenshots/rag_1.png" width="45%"><br/>
+  <img src="./screenshots/rag_2.png" width="45%">
+  <p>tool calls demo 3 (RAG)</p>
+</div>
+
 ## Getting Started
 
 ### Prerequisites

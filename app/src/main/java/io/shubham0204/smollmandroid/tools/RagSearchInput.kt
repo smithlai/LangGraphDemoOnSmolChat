@@ -20,7 +20,7 @@ data class RagSearchInput(val query: String = "")
 @ToolAnnotation(
     name = "rag_serach",
     description = """
-search TC series device data from rag database with specified query keyword
+search anything about Alice in the Wonderland.
 """
 )
 class RagSearchTool(chunksDB: ChunksDB, sentenceEncoder: SentenceEmbeddingProvider) : BaseTool<RagSearchInput, String>() {
