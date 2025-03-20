@@ -178,6 +178,7 @@ class SmolLMManager(
             }
         }
     }
+
     fun getResponse(
         query: String,
         responseTransform: (String) -> String,
@@ -190,81 +191,81 @@ class SmolLMManager(
             assert(chat != null) { "Please call SmolLMManager.create() first." }
             responseGenerationJob =
                 CoroutineScope(Dispatchers.Default).launch {
-                    isInferenceOn = true
-                    var response = ""
-                    val duration =
-                        measureTime {
-                            val usingGraph = true
-                            if (usingGraph) {
-                                // 創建圖（如果需要）
-                                if (conversationGraph == null) {
-                                    conversationGraph = createGraph(
-                                        model = smolLMWithTools,
-                                        tools = tools
-                                    )
-                                }
+                isInferenceOn = true
+                var response = ""
 
-                                // 這邊只用來做動態回應展示
-                                val queueing_messages = mutableListOf<Message>()
-                                conversationGraph?.getNode("llm")?.takeIf { it is LLMNode }.let {
-                                    val llmNode = it as LLMNode
-                                    llmNode.setProgressCallback { part ->
+                try {
+                    val duration = measureTime {
+                        val usingGraph = true
+                        if (usingGraph) {
+                            // 創建圖（如果需要）
+                            if (conversationGraph == null) {
+                                conversationGraph = createGraph(
+                                    model = smolLMWithTools,
+                                    tools = tools
+                                )
+                            }
 
-                                        val temp = mutableListOf<Message>().apply {
-                                            addAll(queueing_messages)
-                                        }
-                                        queueing_messages.clear()
-                                        showGraphMessages(temp)
+                            // 設置動態顯示訊息
+                            val queueing_messages = mutableListOf<Message>()
+                            conversationGraph?.getNode("llm")?.takeIf { it is LLMNode }.let {
+                                val llmNode = it as LLMNode
+                                llmNode.setProgressCallback { part ->
 
-                                        val transformed = responseTransform(part)
-                                        withContext(Dispatchers.Main) {
-                                            onPartialResponseGenerated(transformed)
-                                        }
+                                    val temp = mutableListOf<Message>().apply {
+                                        addAll(queueing_messages)
                                     }
-                                }
+                                    queueing_messages.clear()
+                                    showGraphMessages(temp)
 
-                                conversationGraph?.setOnNodeCompleteCallback { message_list ->
-                                    // run time update UI to display hidden messages in graph
-                                    if (message_list.isNotEmpty()) {
-                                        val temp = mutableListOf<Message>().apply {
-                                            addAll(queueing_messages)
-                                        }
-                                        queueing_messages.clear()
-                                        showGraphMessages(temp)
-                                        queueing_messages.addAll(message_list)
-                                    }
-                                }
-
-                                // Add the user message to the state
-                                customState.addMessage(MessageRole.USER, query)
-
-                                // Run the graph with the current state
-                                val result = conversationGraph?.run(customState)
-
-                                // Update the current state with the result
-                                result?.let {
-                                    if (result.error?.isNotEmpty() == true) {
-                                        throw Exception("${result.error}")
-                                    } else {
-                                        val assistantResponse = it.getLastAssistantMessage()
-                                        val final_msg = assistantResponse?.content ?: ""
-                                        LOGD("LangGraph generated response: ${final_msg.take(50)}...")
-                                        response = responseTransform(final_msg)
-                                        withContext(Dispatchers.Main) {
-                                            onPartialResponseGenerated("")
-                                        }
-                                    }
-                                }
-                            } else {
-                                // Original
-                                instance.getResponse(query).collect { piece ->
-                                    response += responseTransform(piece)
+                                    val transformed = responseTransform(part)
                                     withContext(Dispatchers.Main) {
-                                        onPartialResponseGenerated(response)
+                                        onPartialResponseGenerated(transformed)
                                     }
                                 }
                             }
+
+                            conversationGraph?.setOnNodeCompleteCallback { message_list ->
+                                if (message_list.isNotEmpty()) {
+                                    val temp = mutableListOf<Message>().apply {
+                                        addAll(queueing_messages)
+                                    }
+                                    queueing_messages.clear()
+                                    showGraphMessages(temp)
+                                    queueing_messages.addAll(message_list)
+                                }
+                            }
+
+                                // Add the user message to the state
+                            customState.addMessage(MessageRole.USER, query)
+
+                                // Run the graph with the current state
+                            val result = conversationGraph?.run(customState)
+
+                                // Update the current state with the result
+                            result?.let {
+                                if (result.error?.isNotEmpty() == true) {
+                                    throw Exception("${result.error}")
+                                } else {
+                                    val assistantResponse = it.getLastAssistantMessage()
+                                    val final_msg = assistantResponse?.content ?: ""
+                                    LOGD("LangGraph generated response: ${final_msg.take(50)}...")
+                                    response = responseTransform(final_msg)
+                                    withContext(Dispatchers.Main) {
+                                        onPartialResponseGenerated("")
+                                    }
+                                }
+                            }
+                        } else {
+                                // Original
+                            instance.getResponse(query).collect { piece ->
+                                response += responseTransform(piece)
+                                withContext(Dispatchers.Main) {
+                                    onPartialResponseGenerated(response)
+                                }
+                            }
                         }
+                    }
                     // once the response is generated
                     // add it to the messages database
                     messagesDB.addAssistantMessage(chat!!.id, response)
@@ -279,7 +280,21 @@ class SmolLMManager(
                             ),
                         )
                     }
+                // Handle internal error try-catch 
+                } catch (e: CancellationException) {
+                    withContext(Dispatchers.Main) {
+                        isInferenceOn = false
+                        onCancelled()
+                    }
+                } catch (e: Exception) {
+                    // 這裡捕獲異常並調用 onError 回調
+                    withContext(Dispatchers.Main) {
+                        Log.e(LOGTAG, "Error in coroutine: ${e.message}", e)
+                        isInferenceOn = false
+                        onError(e)
+                    }
                 }
+            }
         } catch (e: CancellationException) {
             isInferenceOn = false
             onCancelled()

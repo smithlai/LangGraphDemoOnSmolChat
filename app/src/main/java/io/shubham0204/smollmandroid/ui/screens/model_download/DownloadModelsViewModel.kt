@@ -21,6 +21,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.provider.OpenableColumns
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.net.toUri
@@ -122,6 +123,7 @@ class DownloadModelsViewModel(
                 val ggufReader = GGUFReader()
                 ggufReader.load(File(context.filesDir, fileName).absolutePath)
                 val contextSize = ggufReader.getContextSize() ?: -1
+                Log.e("aaaaaaa", "xxxxxxxxxx $contextSize")
                 // TODO: Add a default chat template when the model does not contain one
                 val chatTemplate = ggufReader.getChatTemplate() ?: ""
                 modelsDB.addModel(
